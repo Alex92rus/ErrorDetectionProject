@@ -1,6 +1,7 @@
 import re
 from collections import defaultdict
 
+
 def extract_data(filename):
     """
     Extracts the sentences from m2 file.
@@ -69,13 +70,13 @@ def extract_data_sentences(filename):
 
     return data
 
+
 def extract_data_from_tsv(filename, limit=0):
 
     data = []
 
     with open(filename, 'r') as tsv:
         line_tokens = [line.strip().split('\t') for line in tsv]
-        sentence = ''
         tokens = []
         errors = []
         for line in line_tokens:
@@ -86,7 +87,7 @@ def extract_data_from_tsv(filename, limit=0):
                 errors = []
             else:
                 tokens.append(line[0])
-                if (line[1] == 'i'):
+                if line[1] == 'i':
                     errors.append((len(tokens) - 1, len(tokens), 'i'))
     return data
 
@@ -106,11 +107,11 @@ def matching_sentences():
     fce_all_data = extract_data('fce_train.gold.max.rasp.old_cat.m2')
     fce_train_data.sort(key=lambda x: x[0])
     fce_all_data.sort(key=lambda x: x[0])
-    missing = 'Despite of the fact that I am a student , I could not get any discounts .'
+    #missing = 'Despite of the fact that I am a student , I could not get any discounts .'
     with open('sentences', 'w+') as file:
         for sent in fce_train_data:
             match = [x for x in fce_all_data if x[0][1:] == sent[0]]
-            if (len(match) > 0):
+            if len(match) > 0:
                 file.write(match[0][0][1:] + '\n')
                 for error in match[0][1]:
                     file.write(str(error[0]) + ', ' + str(error[1]) + ' ' + error[2] + '\n')
@@ -131,6 +132,38 @@ def count_error_types(filename):
             count_vocab[errors[2]] += 1
     return error_vocab, count_vocab
 
+
+def convert_m2_to_tsv(m2_filename, destination_filename):
+    """
+    Converts CLC FCE m2 annotated file to tsv classifier input format
+    Args:
+        m2_filename: the name of the m2 input file
+        destination_filename: the name of the destination tsv file
+    """
+    fce_sentence_data = extract_data(m2_filename)
+    with open(destination_filename, 'w+') as destination_tsv:
+        for sentence, errors in fce_sentence_data:
+            tokens = sentence.split(' ')[1:]
+            incorrect = []
+            for error in errors:
+                for i in range(error[0], error[1]):
+                    if i not in incorrect:
+                        incorrect.append(i)
+                # add the word if the error is on a space
+                if error[0] == error[1]:
+                    incorrect.append(error[0])
+            for tokenIndex in range(0, len(tokens)):
+                line = ''
+                if tokenIndex in incorrect:
+                    line = '{}\t{}'.format(tokens[tokenIndex], 'i\n')
+                else:
+                    line = '{}\t{}'.format(tokens[tokenIndex], 'c\n')
+                destination_tsv.write(line)
+            destination_tsv.write('\n')
+        destination_tsv.write('\n')
+
+
 if __name__ == '__main__':
-    fce_data = extract_data('fce_train.gold.max.rasp.old_cat.m2')
-    print("Sentence: {sentence} with list of error indecies {errors}".format(sentence=data[12][0], errors=data[12][1]))
+    # fce_data = extract_data('fce_train.gold.max.rasp.old_cat.m2')
+    # print("Sentence: {sentence} with list of error indecies {errors}".format(sentence=data[12][0], errors=data[12][1]))
+    convert_m2_to_csv('fce_amt_experiment_best_result.m2', 'fce_public.best.amt.tsv')
