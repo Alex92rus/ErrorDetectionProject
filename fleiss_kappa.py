@@ -10,6 +10,9 @@ def fleiss_kappa(ratings, n):
     Returns:
         the Fleiss' kappa score
 
+    Refactored implementation from:
+        https://gist.github.com/ShinNoNoir/4749548
+
     See also:
         http://en.wikipedia.org/wiki/Fleiss'_kappa
     '''

@@ -457,9 +457,9 @@ def calculate_agreement_sum(agreement_dictionary):
     """
     Calculates agreement over the sum (logical or) of annotations e.g [1, 0, 1] x [1, 0, 0] = [1, 0, 1]
     Args:
-         agreement_dictionary: holding sentence annotation records - settings.RESPONSE_COUNT
-         from non-experts and one expert
-         sentence -> list of annotations (size settings.RESPONSE_COUNT + 1)
+        agreement_dictionary: holding sentence annotation records - settings.RESPONSE_COUNT
+        from non-experts and one expert
+        sentence -> list of annotations (size settings.RESPONSE_COUNT + 1)
 
     Returns:
         The accuracies from combined agreement from one to nine non-experts with the expert
@@ -491,6 +491,56 @@ def calculate_agreement_sum(agreement_dictionary):
                         correct += 1
                     else:
                         incorrect += 1
+            combination_accuracy = correct / (correct + incorrect)
+            combination_accuracies.append(combination_accuracy)
+        standard_deviation = np.std(combination_accuracies)
+        standard_deviations.append(standard_deviation)
+        accuracy = sum(combination_accuracies) / len(combination_accuracies)
+        accuracies.append(accuracy)
+    return accuracies, standard_deviations
+
+
+def calculate_agreement_sentence_sum(agreement_dictionary):
+    """
+    Calculates agreement over the sum (logical or) of annotations e.g [1, 0, 1] x [1, 0, 0] = [1, 0, 1]
+    Args:
+         agreement_dictionary: holding sentence annotation records - settings.RESPONSE_COUNT
+         from non-experts and one expert
+         sentence -> list of annotations (size settings.RESPONSE_COUNT + 1)
+
+    Returns:
+        The accuracies from combined agreement from one to nine non-experts with the expert
+    """
+    sequence = list(range(settings.RESPONSE_COUNT))
+    combinations = []
+    for i in range(settings.RESPONSE_COUNT + 1):
+        combinations.append(list(itertools.combinations(sequence, i)))
+    accuracies = [0]
+    standard_deviations = [0]
+    for i in range(1, settings.RESPONSE_COUNT + 1):
+        current_combinations = combinations[i]
+        combination_accuracies = []
+        for combination in current_combinations:
+            correct = 0
+            incorrect = 0
+            for sentence in agreement_dictionary.keys():
+                expert_annotations = agreement_dictionary[sentence][-1][1]
+                chosen_annotations = [agreement_dictionary[sentence][x][1] for x in combination]
+                votes = np.sum(chosen_annotations, axis=0)
+                for j in range(len(votes)):
+                    if 0 < votes[j] < len(combination):
+                        correct += 1
+                        incorrect += 1
+                    elif votes[j] == len(combination):
+                        if expert_annotations[j] == 1:
+                            correct += 1
+                        else:
+                            incorrect += 1
+                    else:
+                        if expert_annotations[j] == 0:
+                            correct += 1
+                        else:
+                            incorrect += 1
             combination_accuracy = correct / (correct + incorrect)
             combination_accuracies.append(combination_accuracy)
         standard_deviation = np.std(combination_accuracies)
@@ -827,7 +877,7 @@ def run_display_confusion():
     print(precision_and_recall)
 
 
-def plot_metrics(metric_data, x_scope, y_scope, labels, standard_deviations=list(),):
+def plot_metrics(metric_data, x_scope, y_scope, labels, standard_deviations=list(), legend_label='Accuracy'):
     """
     Plots the metric along with its' standard deviation
     Args:
@@ -836,7 +886,7 @@ def plot_metrics(metric_data, x_scope, y_scope, labels, standard_deviations=list
         x_scope: the visible part of the x axis
         y_scope: the visible part of the y axis
     """
-    plt.plot(metric_data)
+    plt.plot(metric_data, label=legend_label)
     x_s = list(range(settings.RESPONSE_COUNT + 1))
     if len(standard_deviations) > 0:
         plt.errorbar(x_s[:len(metric_data)], metric_data, standard_deviations, linestyle='None', marker='^')
@@ -847,6 +897,7 @@ def plot_metrics(metric_data, x_scope, y_scope, labels, standard_deviations=list
     axes.set_xlim(x_scope)
     axes.set_ylim(y_scope)
     plt.grid()
+    plt.legend()
     plt.show()
 
 
@@ -956,6 +1007,7 @@ def rater_gold_f05(agreement_dictionary, golden=False):
     # combinations
     for i in range(settings.RESPONSE_COUNT):
         f05_array = []
+        sentences_annotation_map = defaultdict(list)
         for combination in combinations[i]:
             max_f05_annotation_vector = []
             sentence_counter = 0
@@ -975,6 +1027,7 @@ def rater_gold_f05(agreement_dictionary, golden=False):
                         max_f05 = f05
                         sentence_max = agreement_dictionary[sentence][k][1]
                         k_max = k
+                sentences_annotation_map[sentence] = sentence_max
                 k_s.append(k_max)
                 max_f05_annotation_vector.extend(sentence_max)
             conf_matrix = create_confusion_matrix(annotation_vectors[9], max_f05_annotation_vector)
@@ -986,7 +1039,7 @@ def rater_gold_f05(agreement_dictionary, golden=False):
         standard_deviations.append(f05_standard_deviation)
         f05_scores.append(f05_score)
     print(f05_scores)
-    return f05_scores, standard_deviations
+    return f05_scores, standard_deviations, sentences_annotation_map
 
 
 def inter_rater_f05(agreement_dictionary, golden=False):
@@ -1075,7 +1128,7 @@ def run_agreement_without_golden_random(filename):
     print(accuracies)
     accuracies[0] = accuracies[1]  # pretty bug
     print(standard_deviations)
-    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.6, 0.8], settings.ACCURACY_LABELS,
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.6, 0.8], settings.ACCURACY_LABELS,
                  standard_deviations=standard_deviations)
     save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
 
@@ -1092,8 +1145,8 @@ def run_agreement_with_golden_random(filename):
     print(accuracies)
     accuracies[0] = accuracies[1]  # pretty bug
     print(standard_deviations)
-    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.495, 0.6], settings.ACCURACY_LABELS,
-                 standard_deviations=standard_deviations)
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.495, 0.6], settings.ACCURACY_LABELS,
+                 standard_deviations=standard_deviations, legend_label='random tie-breaking')
     save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
 
 
@@ -1109,8 +1162,8 @@ def run_agreement_with_golden(filename):
     print(accuracies)
     accuracies[0] = accuracies[1]  # pretty bug
     print(standard_deviations)
-    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.495, 0.6], settings.ACCURACY_LABELS,
-                 standard_deviations=standard_deviations)
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.495, 0.6], settings.ACCURACY_LABELS,
+                 standard_deviations=standard_deviations, legend_label='majority vote (Snow et al.)')
     save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
 
 
@@ -1237,14 +1290,16 @@ def run_agreement_per_turker():
     turker_accuracies = accuracy_per_turker(agreement_dictionary)
     values_list = [value[0] for value in turker_accuracies.values()]
     plt.scatter(*zip(*values_list), marker='P')
-    plt.xlabel('Number of HITs completed')
-    plt.ylabel('Accuracy with expert')
+    plt.xlabel('number of HITs completed')
+    plt.ylabel('accuracy with expert')
     plt.grid()
     plt.show()
     max_number_of_HITs = max([y[0][0] for y in turker_accuracies.values()])
     accuracy_for_count = []
+    turker_count = []
     for i in range(1, 7):
         accuracies = [y[0][1] for y in turker_accuracies.values() if (i - 1) * 10 < y[0][0] <= i * 10]
+        turker_count.append(len(accuracies))
         if len(accuracies) > 0:
             accuracy_for_count.append(np.mean(accuracies))
     weight = sum(accuracy_for_count)
@@ -1256,11 +1311,17 @@ def run_agreement_per_turker():
     axes = plt.gca()
     axes.set_xlim([0, 60])
     axes.set_ylim([0.0, 1.0])
-    print(uniform_arr)
-    plt.xlabel('Number of HITs completed')
-    plt.ylabel('Accuracy weight')
+    plt.xlabel('number of HITs completed')
+    plt.ylabel('accuracy weight')
     plt.grid()
     plt.show()
+    df_dict = {}
+    df_dict['Number of HITs'] = ['1-10', '11-20', '21-30', '31-40', '41-50', '51-60']
+    df_dict['Number of Turkers'] = turker_count
+    df_dict['Uniform Weights']  =  uniform_arr
+    df_dict['Average Accuracy'] = accuracy_for_count
+    df = pd.DataFrame(data=df_dict)
+    df.to_csv(path_or_buf='agreement_methods/individual_accuracy.csv', columns=['Number of HITs', 'Number of Turkers', 'Uniform Weights', 'Average Accuracy'])
     #plot_metrics(uniform_arr,[0, len(uniform_arr)], [0,0.20], labels={'xlabel': 'number of HITS', 'ylabel': 'uniform distribution'})
 
 def get_guessed_errors_counts():
@@ -1409,6 +1470,8 @@ def calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies)
         for combination in current_combinations:
             correct = 0
             incorrect = 0
+            matrix_correct = defaultdict(int)
+            classes = ['no error', 'has error']
             for sentence in agreement_dictionary.keys():
                 expert_annotations = agreement_dictionary[sentence][-1][1]
                 chosen_annotations = [agreement_dictionary[sentence][x][1] for x in combination]
@@ -1434,15 +1497,19 @@ def calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies)
                 for j in range(len(chosen_annotations[0])):
                     if expert_annotations[j] == result_votes[j]:
                         correct += 1
+                        if len(expert_annotations) == 1:
+                            matrix_correct['correct ' + classes[expert_annotations[j]]] += 1
                     else:
                         incorrect += 1
+                        if len(expert_annotations) == 1:
+                            matrix_correct['in_correct ' + classes[expert_annotations[j]]] += 1
             combination_accuracy = correct / (correct + incorrect)
             combination_accuracies.append(combination_accuracy)
         standard_deviation = np.std(combination_accuracies)
         standard_deviations.append(standard_deviation)
         accuracy = sum(combination_accuracies) / len(combination_accuracies)
         accuracies.append(accuracy)
-    return accuracies, standard_deviations
+    return accuracies, standard_deviations, matrix_correct
 
 
 def run_agreement_stv(filename):
@@ -1455,7 +1522,8 @@ def run_agreement_stv(filename):
     accuracies[0] = accuracies[1]
     print(accuracies)
     print(standard_deviations)
-    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.495, 0.6], settings.ACCURACY_LABELS, standard_deviations=standard_deviations)
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.495, 0.6], settings.ACCURACY_LABELS,
+                 standard_deviations=standard_deviations, legend_label='most accurate tie-breaking')
     save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
 
 
@@ -1467,12 +1535,25 @@ def run_agreement_sum(filename):
     accuracies, standard_deviations = calculate_agreement_sum(agreement_dictionary)
     accuracies[0] = accuracies[1]
     print(accuracies)
-    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.1, 0.7], settings.ACCURACY_LABELS,
-                 standard_deviations=standard_deviations)
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.1, 0.7], settings.ACCURACY_LABELS,
+                 standard_deviations=standard_deviations, legend_label='sum of judgements')
     save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
 
 
-def run_agreement_weighted_votes(filenames, annotation_limit=sys.maxsize):
+def run_agreement_weighted_judgements(filename):
+    gold_data = fd.extract_data(settings.AMT_FCE_M2)
+    gold_dict = create_gold_dict(gold_data)
+    annotations = get_annotations(golden=gold_dict)
+    agreement_dictionary, annotations_for_sentence = create_agreement_dictionary(annotations, gold_dict)
+    turker_accuracies = accuracy_per_turker(agreement_dictionary, annotation_limit=sys.maxsize)
+    accuracies, standard_deviations, matrix_correct = calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies)
+    accuracies[0] = accuracies[1]
+    plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT + 0.05], [0.495, 0.60],
+                             legend_label='weighted judgements', standard_deviations=standard_deviations, labels=settings.ACCURACY_LABELS)
+    save_metric_stdev(filename, accuracies, standard_deviations, 'Accuracy')
+
+
+def run_agreement_weighted_votes(filenames, annotation_limit=sys.maxsize, legend_labels=['overall accuracy', 'accuracy over first 10 annotations']):
     gold_data = fd.extract_data(settings.AMT_FCE_M2)
     gold_dict = create_gold_dict(gold_data)
     annotations = get_annotations(golden=gold_dict)
@@ -1481,14 +1562,15 @@ def run_agreement_weighted_votes(filenames, annotation_limit=sys.maxsize):
     turker_accuracies_limit_2 = accuracy_per_turker(agreement_dictionary, annotation_limit=annotation_limit)
 
     turker_accuracies = accuracy_per_turker(agreement_dictionary, annotation_limit=sys.maxsize)
-    accuracies, standard_deviations = calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies)
-    accuracies_limit, standard_deviations_limit = calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies_limit)
+    accuracies, standard_deviations, matrix_correct = calculate_agreement_weighting_votes(agreement_dictionary,
+                                                                                          turker_accuracies)
+    accuracies_limit, standard_deviations_limit, matrix_correct = calculate_agreement_weighting_votes(agreement_dictionary, turker_accuracies_limit)
     accuracies[0] = accuracies[1]
     accuracies_limit[0] = accuracies_limit[1]
     accuracies_set = [accuracies, accuracies_limit]
     standard_deviations_set = [standard_deviations, standard_deviations_limit]
     plot_multiple_accuracies(accuracies_set, [0.95, settings.RESPONSE_COUNT + 0.05], [0.495, 0.60],
-                             legend_labels=['overall accuracy', 'accuracy over first 10 annotations'],
+                             legend_labels=legend_labels,
                              standard_deviations=standard_deviations_set, loc='upper right')
     # plot_metrics(accuracies, [0.95, settings.RESPONSE_COUNT], [0.495, 0.60], settings.ACCURACY_LABELS,
     #              standard_deviations=standard_deviations)
@@ -1564,16 +1646,20 @@ def run_stacked_plots():
     gold_data = fd.extract_data(settings.AMT_FCE_M2)
     gold_dict = create_gold_dict(gold_data)
     annotations = get_annotations(golden=gold_dict)
-    agreement_dictionary, annotations_for_sentence = create_agreement_dictionary(annotations, gold_dict)
-    turker_accuracies = accuracy_per_turker(agreement_dictionary)
+    sentence_level_agreement_dictionary, annotations_per_sentence = create_agreement_dictionary(annotations, gold_dict) # create_binary_agreement_dictionary(gold_dict)
+    word_level_agreement_dictionary, annotations_per_sentence = create_agreement_dictionary(annotations, gold_dict)
+    turker_accuracies = accuracy_per_turker(word_level_agreement_dictionary)
     accuracies_set = [[x] for x in range(5)]
     standard_deviations_set = [[x] for x in range(5)]
-    accuracies_set[0], standard_deviations_set[0] = calculate_agreement_sum(agreement_dictionary)
-    accuracies_set[1], standard_deviations_set[1] = calculate_agreement_stv(agreement_dictionary, turker_accuracies)
-    accuracies_set[2], standard_deviations_set[2] = calculate_agreement_random(agreement_dictionary)
-    accuracies_set[3], standard_deviations_set[3] = calculate_agreement(agreement_dictionary)
-    accuracies_set[4], standard_deviations_set[4] = calculate_agreement_weighting_votes(agreement_dictionary,
+    accuracies_set[0], standard_deviations_set[0] = calculate_agreement_sum(word_level_agreement_dictionary)
+    accuracies_set[1], standard_deviations_set[1] = calculate_agreement_stv(sentence_level_agreement_dictionary, turker_accuracies)
+    accuracies_set[2], standard_deviations_set[2] = calculate_agreement_random(sentence_level_agreement_dictionary)
+    accuracies_set[3], standard_deviations_set[3] = calculate_agreement(sentence_level_agreement_dictionary)
+    accuracies_set[4], standard_deviations_set[4], correct_matrix = calculate_agreement_weighting_votes(sentence_level_agreement_dictionary,
                                                                                         turker_accuracies)
+    print(correct_matrix)
+    dir_prefix = 'agreement_methods/accuracy_stdevs_sentence_double_'
+    file_names = [dir_prefix + x for x in ['sum', 'stv', 'random', 'snow', 'weighting_votes']]
     for i in range(len(accuracies_set)):
         print('Accuracies ', i, ' : ', accuracies_set[i])
     for i in range(len(accuracies_set)):
@@ -1581,7 +1667,9 @@ def run_stacked_plots():
     plot_labels = ['sum of judgements', 'most accurate tie-breaking', 'random tie-breaking',
                    'majority vote (Snow et al.)', 'weighted judgements']
     plot_multiple_accuracies(accuracies_set, [1, settings.RESPONSE_COUNT], [0.2,  0.8],
-                             legend_labels=plot_labels, standard_deviations=standard_deviations_set)
+                             legend_labels=plot_labels, standard_deviations=standard_deviations_set, loc='upper right')
+    for i in range(len(file_names)):
+        save_metric_stdev(file_names[i], accuracies_set[i], standard_deviations_set[i], 'Accuracy')
 
 
 def run_stacked_plots_different_annotations():
@@ -1620,7 +1708,7 @@ def run_compute_inter_annotator_agreement_f05():
     stdev_arr = []
     f05_scores, f05_standard_deviations, sentences_annotation_map = inter_rater_f05_sentence(agreement_dictionary)
     f05_scores_golden, f05_standard_deviations_golden, sentences_annotation_map = inter_rater_f05_sentence(agreement_dictionary, golden=True)
-    f05_scores_gold_only, f05_standard_deviations_gold_only = rater_gold_f05(agreement_dictionary, golden=True)
+    f05_scores_gold_only, f05_standard_deviations_gold_only, sentences_annotation_map = rater_gold_f05(agreement_dictionary, golden=True)
     scores_arr.append(f05_scores)
     scores_arr.append(f05_scores_golden)
     scores_arr.append(f05_scores_gold_only)
@@ -1642,17 +1730,82 @@ def run_compute_inter_annotator_agreement_f05():
                       f05_standard_deviations_gold_only, 'F0.5')
 
 
+def extract_values(value_name):
+    """
+       Extracts specific metric values from ML training file
+
+       Return:
+          Array of the required metrics
+    """
+    train_array = []
+    amt_train_array = []
+    with open('marek_values_with_test.txt') as values_file:
+        lines = values_file.readlines()
+        pass_through = False
+        for line in lines:
+            if line[0:3] == 'AMT':
+                pass_through = True
+            if line[0:len(value_name)] == value_name:
+                metric_value = line.split()[1]
+                if pass_through:
+                    amt_train_array.append(metric_value)
+                else:
+                    train_array.append(metric_value)
+    return train_array, amt_train_array
+
+
+def amt_vs_train_analyses():
+    train_array, amt_array = extract_values('test0_accuracy')
+    print(train_array)
+    print(amt_array)
+    percentages_x = [x * 10 for x in list(range(len(train_array)))]
+    plt.plot(percentages_x, train_array, 'bs', label='only train data')
+    plt.plot(percentages_x, amt_array, 'r^', label='train plus AMT')
+    plt.grid()
+    plt.xlabel('percentages')
+    plt.ylabel('accuracy')
+    plt.legend()
+    x = list(range(0, 100, 10))
+    labels = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%']
+    plt.xticks(x, labels, rotation='vertical')
+    plt.show()
+
+
+def lstm_classifier_metrics_in_csv_with_dataframe():
+    """
+       Extracts metrics values from ML LSTM training file to CSV
+    """
+    df_dict = dict()
+    df_dict['percentages'] = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%']
+    train_f05, amt_f05 = extract_values('test0_f05')
+    df_dict['test0_f05'] = train_f05
+    df_dict['AMTtest0_f05'] = amt_f05
+    train_p, amt_p = extract_values('test0_p')
+    df_dict['test0_p'] = train_p
+    df_dict['AMTtest0_p'] = amt_p
+    train_accuracy, amt_accuracy = extract_values('test0_accuracy')
+    df_dict['test0_accuracy'] = train_accuracy
+    df_dict['AMTtest0_accuracy'] = amt_accuracy
+    df = pd.DataFrame(data=df_dict)
+    df.to_csv(path_or_buf='lstm_scores.csv', columns=['percentages','test0_f05', 'AMTtest0_f05', 'test0_p',
+                                                      'AMTtest0_p', 'test0_accuracy', 'AMTtest0_accuracy'], index=False)
+
+
 if __name__ == '__main__':
+    #amt_vs_train_analyses()
+    lstm_classifier_metrics_in_csv_with_dataframe()
     # run_agreement_without_golden('agreement_methods/accuracy_stdevs_without_golden_snow_et_al_sorted.csv')
-    #run_agreement_with_golden('agreement_methods/accuracy_stdevs_with_golden_snow_et_al.csv')
+    # run_agreement_with_golden('agreement_methods/accuracy_stdevs_with_golden_snow_et_al.csv')
+    #  run_agreement_with_golden_random('agreement_methods/accuracy_stdevs_with_golden_random.csv')
     # run_agreement_with_golden_and_shadow('agreement_methods/accuracy_stdevs_with_golden_and_shadow_snow_et_al.csv')
     # run_agreement_stv('agreement_methods/accuracy_stdevs_stv.csv')
     # run_agreement_sum('agreement_methods/accuracy_stdevs_sum.csv')
     # run_best_pseudo_turker()
     # run_stacked_plots()
     # run_agreement_per_turker()
+    # run_agreement_weighted_judgements('accuracy_stdevs_weighting_votes.csv')
     # run_agreement_weighted_votes(['accuracy_stdevs_weighting_votes.csv',
-    # 'accuracy_stdevs_weighting_votes_limit_10.csv'], annotation_limit=10)
+    # 'accuracy_stdevs_weighting_votes_limit_1.csv'], annotation_limit=10)
     # run_get_state_counts()
     # worker_information = extract_information_per_turker(settings.AMT_FILE)
     # worker_information = test_results_information(settings.AMT_SENTENCE_BATCH)
@@ -1662,7 +1815,7 @@ if __name__ == '__main__':
     # print('Response Time Standard Deviation', np.std(response_time_averages))
     # print('Max response time: ', np.max(response_time_averages))
     # print('Min response time: ', np.min(response_time_averages))
-    # run_compute_inter_annotator_agreement_f05()
+    #run_compute_inter_annotator_agreement_f05()
     # run_stacked_plots_different_annotations()
     # gold_data = fd.extract_data(settings.AMT_FCE_M2)
     #run_best_pseudo_turker()
@@ -1678,4 +1831,4 @@ if __name__ == '__main__':
     # for sentence in annotations_for_sentence.keys():
     #     pairs.append((sentence, annotations_for_sentence[sentence], sentences_annotation_map[sentence]))
     # convert_m2.extract_to_m2('fce_amt_experiment_best_result.m2', pairs)
-    run_agreement_per_turker()
+    #run_agreement_per_turker()

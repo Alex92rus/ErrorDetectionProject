@@ -1,3 +1,4 @@
+import random
 import re
 from collections import defaultdict
 
@@ -163,7 +164,42 @@ def convert_m2_to_tsv(m2_filename, destination_filename):
         destination_tsv.write('\n')
 
 
+def generate_train_percentage_data(train_file, destination_dir):
+    """
+    Converts CLC FCE m2 annotated file to tsv classifier input format
+    Args:
+        m2_filename: the name of the m2 input file
+        destination_filename: the name of the destination tsv file
+    """
+    fce_sentence_data = extract_data(train_file)
+    one_tenth = len(fce_sentence_data) // 10
+    for i in range(1, 11):
+        indexes = random.sample(range(0, len(fce_sentence_data)), one_tenth * i)
+        destination_file = destination_dir + '/' + 'train_' + str(i * 10) + 'percent'
+        fce_sentence_data_batch = [sentence[1] for sentence in enumerate(fce_sentence_data) if sentence[0] in indexes]
+        with open(destination_file, 'w+') as destination_tsv:
+            for sentence, errors in fce_sentence_data_batch:
+                tokens = sentence.split(' ')[1:]
+                incorrect = []
+                for error in errors:
+                    for i in range(error[0], error[1]):
+                        if i not in incorrect:
+                            incorrect.append(i)
+                    # add the word if the error is on a space
+                    if error[0] == error[1]:
+                        incorrect.append(error[0])
+                for tokenIndex in range(0, len(tokens)):
+                    line = ''
+                    if tokenIndex in incorrect:
+                        line = '{}\t{}'.format(tokens[tokenIndex], 'i\n')
+                    else:
+                        line = '{}\t{}'.format(tokens[tokenIndex], 'c\n')
+                    destination_tsv.write(line)
+                destination_tsv.write('\n')
+            destination_tsv.write('\n')
+
+
 if __name__ == '__main__':
     # fce_data = extract_data('fce_train.gold.max.rasp.old_cat.m2')
     # print("Sentence: {sentence} with list of error indecies {errors}".format(sentence=data[12][0], errors=data[12][1]))
-    convert_m2_to_csv('fce_amt_experiment_best_result.m2', 'fce_public.best.amt.tsv')
+    generate_train_percentage_data('fce_train.gold.max.rasp.old_cat.m2', 'train_data_chuncks_tsv')
