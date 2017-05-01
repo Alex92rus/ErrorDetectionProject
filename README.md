@@ -22,7 +22,8 @@ The code in this directory was used for the analysis in the thesis: Evaluation o
 
 
 Code organization
-Most of functions and modules are implemented in agreement_methods.py file. Besides, there are a series of Python scripts and Jupyter notebooks that implement some necessary scripts. Other modules and dependencies are as follows:
+Most of functions and modules are implemented in agreement_methods.py file. The MLP classifier used for evaluation is under the classifier directory.
+Besides, there are a series of Python scripts and Jupyter notebooks that implement some necessary scripts. Other modules and dependencies are as follows:
 
 Directories:
 agreement_methods - analysis of the agreement methods
